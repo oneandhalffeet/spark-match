@@ -1,8 +1,10 @@
 # Matchmaking Engine
 
+A high-performance in-memory matchmaking engine for dating applications, built with Go.
+
 ## Project Description
 
-a high-performance in-memory matchmaking engine for a dating app. The system should allow users to register profiles and retrieve the top 5 most compatible matches in real time.A combination of geohashing, scoring logic, and smart memory structures to make the system fast and extensible, even without a real database.
+This system implements a real-time matchmaking service that uses geohashing for efficient location-based filtering and pre-computed match scores for instant retrieval. Users can register profiles and get their top 5 most compatible matches based on age similarity, shared interests, and location proximity.
 
 ## Architecture Decisions
 
@@ -11,6 +13,21 @@ a high-performance in-memory matchmaking engine for a dating app. The system sho
 - **Geohash quadrants**: Groups users by location for efficient proximity filtering  
 - **Pre-computed scores**: Match scores calculated on registration for instant retrieval
 - **Exclusion sets**: Maintains excluded users (matched/blocked/disliked) separately
+- **Gender preference filtering**: Supports user-defined gender preferences for matching
+- **Pagination support**: Allows fetching matches in pages for better scalability
+
+### Pre-computation Strategy
+When a new profile registers:
+1. Calculate geohash (precision 5) for location-based indexing
+2. Score against all profiles in same and adjacent quadrants
+3. Store sorted match lists for both new and existing profiles
+4. Result: O(1) match retrieval, O(n) registration where n = users in quadrant
+
+### Scoring Algorithm
+- Age similarity: 30 points max (reduced by 2 points per year difference)
+- Shared interests: 40 points max (10 points per common interest)
+- Location proximity: 30 points max (reduced by 1 point per 5km)
+- Total: 100 points max
 
 ## Running the Project
 
@@ -18,25 +35,28 @@ a high-performance in-memory matchmaking engine for a dating app. The system sho
 - Go 1.21 or higher
 - Docker (optional)
 
-### Local Development
+### Quick Start
 ```bash
 # Install dependencies
-go mod download
+make deps
 
 # Run the server
-go run main.go
+make run
 
 # Run tests
-go test ./...
+make test
+
+# Seed sample data (server must be running)
+make seed
 ```
 
 ### Docker
 ```bash
 # Build image
-docker build -t matchmaking-engine .
+make docker-build
 
 # Run container
-docker run -p 8080:8080 matchmaking-engine
+make docker-run
 ```
 
 ## API Documentation
@@ -51,22 +71,36 @@ Request:
   "age": 28,
   "gender": "F",
   "location": { "lat": 13.7563, "lon": 100.5018 },
-  "interests": ["music", "art", "travel"]
+  "interests": ["music", "art", "travel"],
+  "looking_for": "M"
 }
 ```
 
+### PUT /profiles
+Update an existing user profile.
+
+Request: Same as POST /profiles
+
 ### GET /match/:id
-Get top 5 matches for a user.
+Get matches for a user with pagination.
+
+Query Parameters:
+- `limit`: Number of results (default: 5)
+- `offset`: Pagination offset (default: 0)
 
 Response:
 ```json
-[
-  {
-    "profile_id": "user456",
-    "score": 85.5
-  },
-  ...
-]
+{
+  "matches": [
+    {
+      "profile_id": "user456",
+      "score": 85.5
+    }
+  ],
+  "total": 15,
+  "limit": 5,
+  "offset": 0
+}
 ```
 
 ### GET /seed?count=100
@@ -81,6 +115,22 @@ Response:
 ```
 
 ## Production Considerations
+
+### What I Would Do Differently
+1. **Database Persistence**: Add PostgreSQL/MongoDB for data durability
+2. **Caching Layer**: Implement Redis for distributed caching
+3. **Horizontal Scaling**: Shard by geohash prefix for multiple instances
+4. **Async Processing**: Use message queues for match computation
+5. **Monitoring**: Add Prometheus metrics and health checks
+6. **Authentication**: Implement JWT-based auth
+7. **Rate Limiting**: Protect endpoints from abuse
+8. **Batch Operations**: Optimize bulk profile updates
+
+### Performance Optimizations
+- Use goroutines for parallel match computation
+- Implement connection pooling
+- Add request timeouts and circuit breakers
+- Use protobuf for internal communication
 
 ## Testing
 
